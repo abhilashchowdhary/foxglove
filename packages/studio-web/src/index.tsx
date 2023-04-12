@@ -1,14 +1,13 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/
-
-import { StrictMode, useEffect } from "react";
+import {StrictMode, useEffect, useState} from "react";
 import ReactDOM from "react-dom";
 
 import Logger from "@foxglove/log";
-import { IDataSourceFactory } from "@foxglove/studio-base";
+import {IDataSourceFactory} from "@foxglove/studio-base";
 
 import VersionBanner from "./VersionBanner";
+import axios from "axios";
+import {PropagateLoader} from "react-spinners";
+
 
 const log = Logger.getLogger(__filename);
 
@@ -27,6 +26,51 @@ type MainParams = {
   dataSources?: IDataSourceFactory[];
   extraProviders?: JSX.Element[];
 };
+
+function UrlForm(): JSX.Element {
+  const [isLoading, setIsLoading] = useState(false);
+  const [inputUrl, setInputUrl] = useState("");
+
+  const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoading(true);
+    try {
+      await axios.post("http://127.0.0.1:5000/time_to_mcap", {url: inputUrl}, {
+        responseType: "blob",
+      }).then(response => {
+        // Create a temporary URL that points to the downloaded file
+        const fileUrl = URL.createObjectURL(new Blob([response.data]));
+
+        // Create a link and simulate a click to download the file
+        const link = document.createElement("a");
+        link.href = fileUrl;
+        link.download = "file.mcap";
+        link.click();
+
+        // Clean up the temporary URL
+        URL.revokeObjectURL(fileUrl);
+      }).catch(error => {
+        console.error("API request failed:", error);
+      });
+    } catch (error) {
+      console.error("API request failed:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+      <form onSubmit={onSubmit}>
+        <input
+            type="text"
+            value={inputUrl}
+            onChange={(event) => setInputUrl(event.target.value)}
+        />
+        <button type="submit">Submit</button>
+        {isLoading ? <PropagateLoader /> : null}
+      </form>
+  );
+}
 
 export async function main(params: MainParams = {}): Promise<void> {
   log.debug("initializing");
@@ -78,6 +122,7 @@ export async function main(params: MainParams = {}): Promise<void> {
     <StrictMode>
       <LogAfterRender>
         {banner}
+        <UrlForm />
         <Root extraProviders={params.extraProviders} dataSources={params.dataSources} />
       </LogAfterRender>
     </StrictMode>,
